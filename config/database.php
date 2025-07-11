@@ -1,9 +1,9 @@
 <?php
 // Configuração do banco de dados
 $host = 'localhost';
-$dbname = 'matchzy_manager';
-$username = 'root';
-$password = '';
+$dbname = 'cs2';
+$username = 'click';
+$password = 'pucon@chile';
 
 try {
     $pdo = new PDO("mysql:host=$host;dbname=$dbname;charset=utf8mb4", $username, $password);
