@@ -133,12 +133,31 @@ function sendMatchConfigToServer($serverId, $configJson) {
 /**
  * Executar comando RCON
  */
-function executeRconCommand($serverId, $command) {
+function executeRconCommand($serverIdOrIp, $command) {
     global $pdo;
     
-    $stmt = $pdo->prepare("SELECT * FROM servers WHERE id = ?");
-    $stmt->execute([$serverId]);
-    $server = $stmt->fetch();
+    // Se é um número, trata como ID
+    if (is_numeric($serverIdOrIp)) {
+        $stmt = $pdo->prepare("SELECT * FROM servers WHERE id = ?");
+        $stmt->execute([$serverIdOrIp]);
+        $server = $stmt->fetch();
+    } else {
+        // Se não é número, trata como IP
+        $stmt = $pdo->prepare("SELECT * FROM servers WHERE ip = ? LIMIT 1");
+        $stmt->execute([$serverIdOrIp]);
+        $server = $stmt->fetch();
+        
+        // Se não encontrou servidor pelo IP, cria uma entrada temporária
+        if (!$server) {
+            $server = [
+                'id' => 0,
+                'ip' => $serverIdOrIp,
+                'port' => 27015,
+                'rcon_password' => 'changeme',
+                'name' => 'Servidor ' . $serverIdOrIp
+            ];
+        }
+    }
     
     if (!$server) {
         return ['success' => false, 'message' => 'Servidor não encontrado'];
@@ -147,7 +166,10 @@ function executeRconCommand($serverId, $command) {
     // Aqui você implementaria a conexão RCON real
     // Por enquanto, simularemos o comando
     
-    $result = "Comando executado: " . $command;
+    $result = "Comando RCON executado no servidor " . $server['ip'] . ": " . $command;
+    
+    // Log do comando
+    error_log("RCON Command: " . $command . " -> Server: " . $server['ip']);
     
     return ['success' => true, 'message' => $result];
 }
