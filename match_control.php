@@ -40,28 +40,29 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
             $host = $_SERVER['HTTP_HOST'];
             $configUrl = $protocol . '://' . $host . '/api/match_config.php?id=' . $match['match_id'];
             
-            // Comando MatchZy - diferentes variações para compatibilidade
-            $commands = [
-                'matchzy_loadmatch_url ' . $configUrl,                    // Sem aspas
-                'matchzy_loadmatch_url "' . $configUrl . '"',             // Com aspas duplas
-                "matchzy_loadmatch_url '" . $configUrl . "'",             // Com aspas simples
-                'get5_loadmatch_url ' . $configUrl                        // Comando alternativo Get5
+            // Comando MatchZy com aspas duplas (formato oficial da documentação)
+            $primaryCommand = 'matchzy_loadmatch_url "' . $configUrl . '"';
+            
+            // Comandos alternativos para fallback
+            $fallbackCommands = [
+                'matchzy_loadmatch_url \'' . $configUrl . '\'',    // Com aspas simples
+                'matchzy_loadmatch_url ' . $configUrl,             // Sem aspas
+                'get5_loadmatch_url "' . $configUrl . '"'          // Get5 alternativo
             ];
             
-            $results = [];
-            $success = false;
+            // Tentar comando principal primeiro
+            $result = executeRconCommand($match['server_ip'], $primaryCommand);
+            $success = $result['success'];
             
-            // Tentar cada comando até um funcionar
-            foreach ($commands as $index => $command) {
-                $result = executeRconCommand($match['server_ip'], $command);
-                $results[] = [
-                    'command' => $command,
-                    'result' => $result
-                ];
-                
-                if ($result['success']) {
-                    $success = true;
-                    break;
+            if (!$success) {
+                // Se falhou, tentar comandos alternativos
+                foreach ($fallbackCommands as $command) {
+                    $result = executeRconCommand($match['server_ip'], $command);
+                    if ($result['success']) {
+                        $primaryCommand = $command; // Atualizar para mostrar qual funcionou
+                        $success = true;
+                        break;
+                    }
                 }
             }
             
@@ -73,14 +74,18 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
             // Mensagem de resultado
             if ($success) {
                 $message = 'Comando de iniciar partida enviado com sucesso!<br>';
-                $message .= 'Comando usado: <code class="bg-gray-700 px-2 py-1 rounded text-sm">' . htmlspecialchars($results[count($results)-1]['command']) . '</code><br>';
-                $message .= 'Config URL: <a href="' . $configUrl . '" target="_blank" class="text-blue-300 hover:text-blue-200">' . $configUrl . '</a>';
+                $message .= 'Comando: <code class="bg-gray-700 px-2 py-1 rounded text-sm">' . htmlspecialchars($primaryCommand) . '</code><br>';
+                $message .= 'Config URL: <a href="' . $configUrl . '" target="_blank" class="text-blue-300 hover:text-blue-200">' . $configUrl . '</a><br>';
+                $message .= '<small class="text-gray-400">Teste a URL acima para verificar se o JSON está correto</small>';
             } else {
-                $message = 'Erro: Todos os comandos falharam!<br>';
-                foreach ($results as $i => $res) {
-                    $message .= 'Comando ' . ($i + 1) . ': <code class="bg-gray-700 px-1 py-0.5 rounded text-xs">' . htmlspecialchars($res['command']) . '</code> - ' . htmlspecialchars($res['result']['message']) . '<br>';
-                }
-                $message .= '<br>Verifique se o MatchZy está instalado no servidor e se a URL está acessível.';
+                $message = 'Erro: Comando MatchZy falhou!<br>';
+                $message .= 'Comando tentado: <code class="bg-gray-700 px-1 py-0.5 rounded text-xs">' . htmlspecialchars($primaryCommand) . '</code><br>';
+                $message .= 'Config URL: <a href="' . $configUrl . '" target="_blank" class="text-blue-300">' . $configUrl . '</a><br>';
+                $message .= 'Erro: ' . htmlspecialchars($result['message'] ?? 'Erro desconhecido') . '<br>';
+                $message .= '<br><strong>Verificações:</strong><br>';
+                $message .= '1. MatchZy está instalado no servidor?<br>';
+                $message .= '2. A URL retorna JSON válido?<br>';
+                $message .= '3. O servidor tem acesso à internet?';
             }
             break;
             

@@ -68,15 +68,51 @@ if ($response === false) {
 
 echo "<h3>Comandos MatchZy sugeridos:</h3>";
 echo "<div style='background: #f0f0f0; padding: 10px; border-radius: 5px;'>";
-echo "<p><strong>Comando 1 (sem aspas):</strong></p>";
-echo "<code>matchzy_loadmatch_url {$configUrl}</code><br><br>";
-echo "<p><strong>Comando 2 (com aspas duplas):</strong></p>";
+echo "<p><strong>Comando OFICIAL (recomendado - com aspas duplas):</strong></p>";
 echo "<code>matchzy_loadmatch_url \"{$configUrl}\"</code><br><br>";
-echo "<p><strong>Comando 3 (com aspas simples):</strong></p>";
+echo "<p><strong>Comando alternativo 1 (aspas simples):</strong></p>";
 echo "<code>matchzy_loadmatch_url '{$configUrl}'</code><br><br>";
-echo "<p><strong>Comando alternativo Get5:</strong></p>";
-echo "<code>get5_loadmatch_url {$configUrl}</code>";
+echo "<p><strong>Comando alternativo 2 (sem aspas):</strong></p>";
+echo "<code>matchzy_loadmatch_url {$configUrl}</code><br><br>";
+echo "<p><strong>Comando Get5 (se não funcionar MatchZy):</strong></p>";
+echo "<code>get5_loadmatch_url \"{$configUrl}\"</code>";
 echo "</div>";
+
+echo "<h3>Links úteis:</h3>";
+echo "<div style='background: #e6f3ff; padding: 10px; border-radius: 5px;'>";
+echo "<p><a href='api/example_config.php' target='_blank' style='color: #0066cc;'>🔗 Ver exemplo oficial de configuração MatchZy</a></p>";
+echo "<p><a href='{$configUrl}' target='_blank' style='color: #0066cc;'>🔗 Ver configuração da sua partida</a></p>";
+echo "</div>";
+
+// Comparar com exemplo oficial
+echo "<h3>Validação do formato JSON:</h3>";
+$exampleUrl = $protocol . '://' . $host . '/api/example_config.php';
+$exampleResponse = @file_get_contents($exampleUrl, false, $context);
+
+if ($exampleResponse) {
+    $exampleData = json_decode($exampleResponse, true);
+    $configData = json_decode($response, true);
+    
+    echo "<div style='background: #f9f9f9; padding: 10px; border-radius: 5px;'>";
+    echo "<h4>Campos obrigatórios do MatchZy:</h4>";
+    $requiredFields = ['matchid', 'team1', 'team2', 'num_maps', 'maplist'];
+    
+    foreach ($requiredFields as $field) {
+        $hasField = isset($configData[$field]);
+        $icon = $hasField ? '✅' : '❌';
+        $status = $hasField ? 'OK' : 'FALTANDO';
+        echo "<p>{$icon} <strong>{$field}:</strong> {$status}</p>";
+    }
+    
+    // Verificar estrutura dos times
+    $team1Valid = isset($configData['team1']['name']) && isset($configData['team1']['players']);
+    $team2Valid = isset($configData['team2']['name']) && isset($configData['team2']['players']);
+    
+    echo "<p>" . ($team1Valid ? '✅' : '❌') . " <strong>team1.name e team1.players:</strong> " . ($team1Valid ? 'OK' : 'FALTANDO') . "</p>";
+    echo "<p>" . ($team2Valid ? '✅' : '❌') . " <strong>team2.name e team2.players:</strong> " . ($team2Valid ? 'OK' : 'FALTANDO') . "</p>";
+    
+    echo "</div>";
+}
 
 echo "<hr>";
 echo "<p><strong>Data/Hora do teste:</strong> " . date('Y-m-d H:i:s') . "</p>";
