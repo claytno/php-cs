@@ -1,6 +1,6 @@
 <?php
 // Configuração do banco de dados
-$host = 'localhost';
+$host = 'app.cs2.click';
 $dbname = 'cs2';
 $username = 'click';
 $password = 'pucon@chile';

@@ -303,18 +303,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $match = $stmt->fetch();
     $events = getMatchEvents($match['match_id'], 20);
 }
-
-// Função auxiliar para atualizar o mapa atual da partida
-function updateMatchCurrentMap($matchId, $mapName) {
-    global $pdo;
-    try {
-        $stmt = $pdo->prepare("UPDATE matches SET current_map = ? WHERE match_id = ?");
-        return $stmt->execute([$mapName, $matchId]);
-    } catch (Exception $e) {
-        error_log("Erro ao atualizar mapa atual: " . $e->getMessage());
-        return false;
-    }
-}
 ?>
 <!DOCTYPE html>
 <html lang="pt-BR">
