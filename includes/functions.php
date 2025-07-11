@@ -11,8 +11,17 @@ function generateMatchId() {
 }
 
 /**
- * Obter partida ativa
- */
+ * Obter partida a    } else if (strpos($command, 'changelevel') !== false) {
+        $mapName = trim(str_replace(['changelevel', '"', "'"], '', $command));
+        return [
+            'success' => true,
+            'console_output' => "Changing level to: {$mapName}\nExecuting changelevel {$mapName}"
+        ];
+    } else if (strpos($command, 'mp_restartgame') !== false) {
+        return [
+            'success' => true,
+            'console_output' => "Restarting the game..."
+        ]; */
 function getActiveMatch() {
     global $pdo;
     
@@ -173,31 +182,92 @@ function executeRconCommand($serverIdOrIp, $command) {
     );
     error_log($logMessage);
     
-    // Aqui você implementaria a conexão RCON real
-    // Por enquanto, simularemos o comando com validação
+    // AQUI: Para desenvolvimento, simular respostas baseadas no tipo de comando
+    // Em produção, você substituiria isso por uma conexão RCON real
     
-    // Simular diferentes tipos de resposta baseado no comando
-    if (strpos($command, 'matchzy_loadmatch_url') !== false) {
-        // Para comandos de carregar match, simular sucesso
-        $result = "MatchZy: Loading match configuration from URL: " . substr($command, 21);
-    } else if (strpos($command, 'mp_pause_match') !== false) {
-        $result = "Match paused";
-    } else if (strpos($command, 'mp_unpause_match') !== false) {
-        $result = "Match unpaused";
-    } else if (strpos($command, 'changelevel') !== false) {
-        $mapName = trim(str_replace('changelevel', '', $command));
-        $result = "Changing level to: " . $mapName;
-    } else {
-        $result = "Command executed: " . $command;
-    }
+    $responses = simulateRconResponse($command);
     
     $successMessage = sprintf(
-        "RCON executado com sucesso no servidor %s:\n%s",
+        "RCON executado no servidor %s:%s\nComando: %s\nResposta do console:\n%s",
         $server['ip'],
-        $result
+        $server['port'] ?? 27015,
+        $command,
+        $responses['console_output']
     );
     
-    return ['success' => true, 'message' => $successMessage, 'command' => $command];
+    return [
+        'success' => $responses['success'], 
+        'message' => $successMessage,
+        'console_output' => $responses['console_output'],
+        'command' => $command
+    ];
+}
+
+/**
+ * Simular respostas RCON para desenvolvimento
+ * SUBSTITUIR por conexão RCON real em produção
+ */
+function simulateRconResponse($command) {
+    // Simular diferentes respostas baseadas no comando
+    
+    if (strpos($command, 'matchzy_loadmatch_url') !== false) {
+        // Extrair URL do comando
+        $url = '';
+        if (preg_match('/matchzy_loadmatch_url\s+["\']?([^"\']+)["\']?/', $command, $matches)) {
+            $url = $matches[1];
+        }
+        
+        // Simular possíveis respostas do MatchZy
+        $possibleResponses = [
+            [
+                'success' => true,
+                'console_output' => "[MatchZy] Loading match configuration from URL: {$url}\n[MatchZy] Successfully loaded match configuration!\n[MatchZy] Match loaded successfully. Waiting for players to ready up!"
+            ],
+            [
+                'success' => false,
+                'console_output' => "[MatchZy] Error: Invalid URL or unable to fetch configuration\n[MatchZy] Failed to load match configuration from: {$url}"
+            ],
+            [
+                'success' => false,
+                'console_output' => "Unknown command: matchzy_loadmatch_url\n(Note: MatchZy plugin may not be installed or loaded)"
+            ],
+            [
+                'success' => false,
+                'console_output' => "[MatchZy] Error: Invalid JSON format in configuration file\n[MatchZy] Required fields missing: Please check 'matchid', 'team1', 'team2', 'num_maps', 'maplist'"
+            ]
+        ];
+        
+        // Para demonstração, retornar o primeiro (sucesso)
+        // Em ambiente real, isso viria do servidor
+        return $possibleResponses[0];
+        
+    } else if (strpos($command, 'mp_pause_match') !== false) {
+        return [
+            'success' => true,
+            'console_output' => "Match paused"
+        ];
+    } else if (strpos($command, 'mp_unpause_match') !== false) {
+        return [
+            'success' => true,
+            'console_output' => "Match unpaused"
+        ];
+    } else if (strpos($command, 'matchzy_endmatch') !== false) {
+        return [
+            'success' => true,
+            'console_output' => "[MatchZy] Match ended by admin"
+        ];
+    } else if (strpos($command, 'changelevel') !== false) {
+        $mapName = trim(str_replace(['changelevel', '"', "'"], '', $command));
+        return [
+            'success' => true,
+            'console_output' => "Changing level to: {$mapName}"
+        ];
+    } else {
+        return [
+            'success' => true,
+            'console_output' => "Command executed: {$command}"
+        ];
+    }
 }
 
 /**

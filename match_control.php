@@ -69,6 +69,41 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
             // Atualizar status se algum comando funcionou
             if ($success) {
                 updateMatchStatus($match['match_id'], 'loading');
+                
+                // Executar sequência de comandos para inicializar partida
+                $sequentialCommands = [];
+                
+                // Automaticamente carregar o primeiro mapa da lista
+                if (!empty($maps) && count($maps) > 0) {
+                    $firstMap = $maps[0];
+                    $sequentialCommands[] = [
+                        'command' => 'changelevel ' . $firstMap,
+                        'description' => 'Carregar primeiro mapa',
+                        'delay' => 2 // segundos
+                    ];
+                }
+                
+                // Executar comandos sequenciais
+                $commandResults = [];
+                foreach ($sequentialCommands as $cmdInfo) {
+                    if (isset($cmdInfo['delay']) && $cmdInfo['delay'] > 0) {
+                        sleep($cmdInfo['delay']); // Aguardar antes de executar
+                    }
+                    
+                    $cmdResult = executeRconCommand($match['server_ip'], $cmdInfo['command']);
+                    $commandResults[] = [
+                        'description' => $cmdInfo['description'],
+                        'command' => $cmdInfo['command'],
+                        'result' => $cmdResult,
+                        'success' => $cmdResult['success']
+                    ];
+                    
+                    // Se é comando de mapa e foi bem-sucedido, atualizar no banco
+                    if (strpos($cmdInfo['command'], 'changelevel') !== false && $cmdResult['success']) {
+                        $mapName = trim(str_replace(['changelevel', '"', "'"], '', $cmdInfo['command']));
+                        updateMatchCurrentMap($match['match_id'], $mapName);
+                    }
+                }
             }
             
             // Mensagem de resultado
@@ -76,16 +111,44 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
                 $message = 'Comando de iniciar partida enviado com sucesso!<br>';
                 $message .= 'Comando: <code class="bg-gray-700 px-2 py-1 rounded text-sm">' . htmlspecialchars($primaryCommand) . '</code><br>';
                 $message .= 'Config URL: <a href="' . $configUrl . '" target="_blank" class="text-blue-300 hover:text-blue-200">' . $configUrl . '</a><br>';
-                $message .= '<small class="text-gray-400">Teste a URL acima para verificar se o JSON está correto</small>';
+                
+                if (isset($result['console_output'])) {
+                    $message .= '<br><strong>Resposta do console (Match Config):</strong><br>';
+                    $message .= '<pre class="bg-gray-700 p-2 rounded text-xs mt-2 overflow-auto">' . htmlspecialchars($result['console_output']) . '</pre>';
+                }
+                
+                // Adicionar informações sobre comandos sequenciais
+                if (isset($commandResults) && !empty($commandResults)) {
+                    $message .= '<br><strong>Comandos Sequenciais:</strong><br>';
+                    foreach ($commandResults as $cmdResult) {
+                        $status = $cmdResult['success'] ? '✅' : '❌';
+                        $message .= $status . ' ' . $cmdResult['description'] . ': ';
+                        $message .= '<code class="bg-gray-700 px-1 py-0.5 rounded text-xs">' . htmlspecialchars($cmdResult['command']) . '</code><br>';
+                        
+                        if (isset($cmdResult['result']['console_output'])) {
+                            $message .= '<pre class="bg-gray-700 p-2 rounded text-xs mt-1 mb-2 overflow-auto max-h-20">' . htmlspecialchars($cmdResult['result']['console_output']) . '</pre>';
+                        }
+                    }
+                }
+                
+                $message .= '<br><small class="text-gray-400">Verifique se os jogadores estão conectados no servidor para iniciar a partida</small>';
             } else {
                 $message = 'Erro: Comando MatchZy falhou!<br>';
                 $message .= 'Comando tentado: <code class="bg-gray-700 px-1 py-0.5 rounded text-xs">' . htmlspecialchars($primaryCommand) . '</code><br>';
                 $message .= 'Config URL: <a href="' . $configUrl . '" target="_blank" class="text-blue-300">' . $configUrl . '</a><br>';
-                $message .= 'Erro: ' . htmlspecialchars($result['message'] ?? 'Erro desconhecido') . '<br>';
-                $message .= '<br><strong>Verificações:</strong><br>';
-                $message .= '1. MatchZy está instalado no servidor?<br>';
-                $message .= '2. A URL retorna JSON válido?<br>';
-                $message .= '3. O servidor tem acesso à internet?';
+                
+                if (isset($result['console_output'])) {
+                    $message .= '<br><strong>Resposta do console:</strong><br>';
+                    $message .= '<pre class="bg-gray-700 p-2 rounded text-xs mt-2 overflow-auto">' . htmlspecialchars($result['console_output']) . '</pre>';
+                }
+                
+                $message .= '<br><strong>Possíveis problemas:</strong><br>';
+                $message .= '1. ❌ MatchZy não está instalado no servidor<br>';
+                $message .= '2. ❌ URL JSON não está acessível<br>';
+                $message .= '3. ❌ JSON tem campos obrigatórios faltando<br>';
+                $message .= '4. ❌ Servidor não tem acesso à internet<br>';
+                $message .= '5. ❌ Plugin MatchZy não foi carregado<br>';
+                $message .= '<br><strong>Comando de verificação:</strong> <code>plugin_print</code> (para ver plugins carregados)';
             }
             break;
             
@@ -130,6 +193,97 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
                 }
             }
             break;
+            
+        case 'check_matchzy':
+            $diagnosticCommands = [
+                'plugin_print' => 'Listar plugins carregados',
+                'matchzy_version' => 'Versão do MatchZy',
+                'matchzy_status' => 'Status do MatchZy',
+                'meta list' => 'Plugins Metamod'
+            ];
+            
+            $results = [];
+            foreach ($diagnosticCommands as $cmd => $desc) {
+                $result = executeRconCommand($match['server_ip'], $cmd);
+                $results[] = [
+                    'command' => $cmd,
+                    'description' => $desc,
+                    'result' => $result
+                ];
+            }
+            
+            $message = 'Diagnóstico do servidor executado:<br><br>';
+            foreach ($results as $diagResult) {
+                $status = $diagResult['result']['success'] ? '✅' : '❌';
+                $message .= '<strong>' . $status . ' ' . $diagResult['description'] . ':</strong><br>';
+                $message .= '<code class="bg-gray-700 px-1 py-0.5 rounded text-xs">' . htmlspecialchars($diagResult['command']) . '</code><br>';
+                if (isset($diagResult['result']['console_output'])) {
+                    $message .= '<pre class="bg-gray-700 p-2 rounded text-xs mt-1 mb-2 overflow-auto max-h-20">' . htmlspecialchars($diagResult['result']['console_output']) . '</pre>';
+                }
+                $message .= '<br>';
+            }
+            break;
+            
+        case 'test_matchzy_config':
+            $protocol = isset($_SERVER['HTTPS']) && $_SERVER['HTTPS'] === 'on' ? 'https' : 'http';
+            $host = $_SERVER['HTTP_HOST'];
+            $configUrl = $protocol . '://' . $host . '/api/match_config.php?id=' . $match['match_id'];
+            
+            // Buscar e validar a configuração JSON
+            $context = stream_context_create([
+                'http' => [
+                    'timeout' => 10,
+                    'method' => 'GET'
+                ]
+            ]);
+            
+            $jsonResponse = @file_get_contents($configUrl, false, $context);
+            
+            if ($jsonResponse === false) {
+                $message = 'Erro: Não foi possível acessar a URL de configuração<br>';
+                $message .= 'URL: <a href="' . $configUrl . '" target="_blank" class="text-blue-300">' . $configUrl . '</a>';
+            } else {
+                $configData = json_decode($jsonResponse, true);
+                
+                if (!$configData) {
+                    $message = 'Erro: JSON inválido retornado pela API<br>';
+                    $message .= 'Response: <pre class="bg-gray-700 p-2 rounded text-xs">' . htmlspecialchars($jsonResponse) . '</pre>';
+                } else {
+                    // Validar campos obrigatórios do MatchZy
+                    $requiredFields = ['matchid', 'team1', 'team2', 'num_maps', 'maplist'];
+                    $missingFields = [];
+                    
+                    foreach ($requiredFields as $field) {
+                        if (!isset($configData[$field])) {
+                            $missingFields[] = $field;
+                        }
+                    }
+                    
+                    // Validar estrutura dos times
+                    $team1Valid = isset($configData['team1']['name']) && isset($configData['team1']['players']);
+                    $team2Valid = isset($configData['team2']['name']) && isset($configData['team2']['players']);
+                    
+                    if (!$team1Valid) $missingFields[] = 'team1.name ou team1.players';
+                    if (!$team2Valid) $missingFields[] = 'team2.name ou team2.players';
+                    
+                    if (empty($missingFields)) {
+                        $message = '✅ Configuração JSON válida para MatchZy!<br>';
+                        $message .= '<strong>Campos encontrados:</strong><br>';
+                        $message .= '• Match ID: ' . htmlspecialchars($configData['matchid']) . '<br>';
+                        $message .= '• Team 1: ' . htmlspecialchars($configData['team1']['name']) . ' (' . count($configData['team1']['players']) . ' jogadores)<br>';
+                        $message .= '• Team 2: ' . htmlspecialchars($configData['team2']['name']) . ' (' . count($configData['team2']['players']) . ' jogadores)<br>';
+                        $message .= '• Mapas: ' . count($configData['maplist']) . ' mapas<br>';
+                        $message .= '<br><strong>JSON Preview:</strong><br>';
+                        $message .= '<pre class="bg-gray-700 p-2 rounded text-xs mt-2 overflow-auto max-h-32">' . htmlspecialchars(json_encode($configData, JSON_PRETTY_PRINT)) . '</pre>';
+                    } else {
+                        $message = 'Erro: Campos obrigatórios faltando no JSON!<br>';
+                        $message .= '<strong>Campos faltando:</strong> ' . implode(', ', $missingFields) . '<br>';
+                        $message .= '<br><strong>JSON atual:</strong><br>';
+                        $message .= '<pre class="bg-gray-700 p-2 rounded text-xs mt-2 overflow-auto max-h-32">' . htmlspecialchars(json_encode($configData, JSON_PRETTY_PRINT)) . '</pre>';
+                    }
+                }
+            }
+            break;
     }
     
     // Registrar evento
@@ -148,6 +302,18 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $stmt->execute([$matchId]);
     $match = $stmt->fetch();
     $events = getMatchEvents($match['match_id'], 20);
+}
+
+// Função auxiliar para atualizar o mapa atual da partida
+function updateMatchCurrentMap($matchId, $mapName) {
+    global $pdo;
+    try {
+        $stmt = $pdo->prepare("UPDATE matches SET current_map = ? WHERE match_id = ?");
+        return $stmt->execute([$mapName, $matchId]);
+    } catch (Exception $e) {
+        error_log("Erro ao atualizar mapa atual: " . $e->getMessage());
+        return false;
+    }
 }
 ?>
 <!DOCTYPE html>
@@ -280,7 +446,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 <i class="fas fa-gamepad mr-2"></i>Controles da Partida
             </h2>
             
-            <div class="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-6 gap-4">
+            <div class="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
                 <?php if ($match['status'] === 'created'): ?>
                 <form method="POST" class="inline">
                     <input type="hidden" name="action" value="start_match">
@@ -343,6 +509,22 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                     <i class="fas fa-link mb-1"></i><br>
                     <span class="text-xs">Testar URL</span>
                 </button>
+                
+                <form method="POST" class="inline">
+                    <input type="hidden" name="action" value="check_matchzy">
+                    <button type="submit" class="w-full bg-orange-600 hover:bg-orange-700 px-4 py-2 rounded-lg transition-colors">
+                        <i class="fas fa-stethoscope mb-1"></i><br>
+                        <span class="text-xs">Diagnóstico</span>
+                    </button>
+                </form>
+                
+                <form method="POST" class="inline">
+                    <input type="hidden" name="action" value="test_matchzy_config">
+                    <button type="submit" class="w-full bg-purple-600 hover:bg-purple-700 px-4 py-2 rounded-lg transition-colors">
+                        <i class="fas fa-code mb-1"></i><br>
+                        <span class="text-xs">Validar JSON</span>
+                    </button>
+                </form>
             </div>
         </div>
 
