@@ -1,0 +1,195 @@
+# MatchZy Manager - Apache Configuration
+
+# Habilitar rewrite engine
+RewriteEngine On
+
+# Forçar HTTPS em produção (descomente se necessário)
+# RewriteCond %{HTTPS} off
+# RewriteRule ^(.*)$ https://%{HTTP_HOST}%{REQUEST_URI} [L,R=301]
+
+# Configurações de segurança
+<Files "config/*.php">
+    Order Allow,Deny
+    Deny from all
+</Files>
+
+<Files "includes/*.php">
+    Order Allow,Deny
+    Deny from all
+</Files>
+
+<Files "*.sql">
+    Order Allow,Deny
+    Deny from all
+</Files>
+
+<Files ".env">
+    Order Allow,Deny
+    Deny from all
+</Files>
+
+# Headers de segurança
+<IfModule mod_headers.c>
+    # Prevenir XSS
+    Header always set X-XSS-Protection "1; mode=block"
+    
+    # Prevenir MIME type sniffing
+    Header always set X-Content-Type-Options "nosniff"
+    
+    # Clickjacking protection
+    Header always set X-Frame-Options "SAMEORIGIN"
+    
+    # CSP (Content Security Policy)
+    Header always set Content-Security-Policy "default-src 'self'; script-src 'self' 'unsafe-inline' cdn.tailwindcss.com unpkg.com cdnjs.cloudflare.com; style-src 'self' 'unsafe-inline' cdn.tailwindcss.com cdnjs.cloudflare.com; img-src 'self' data: https:; font-src 'self' cdnjs.cloudflare.com;"
+    
+    # Remover cabeçalhos que expõem informações do servidor
+    Header always unset X-Powered-By
+    Header always unset Server
+</IfModule>
+
+# Configurações de cache
+<IfModule mod_expires.c>
+    ExpiresActive On
+    
+    # Cache para arquivos estáticos
+    ExpiresByType text/css "access plus 1 month"
+    ExpiresByType application/javascript "access plus 1 month"
+    ExpiresByType image/png "access plus 1 month"
+    ExpiresByType image/jpg "access plus 1 month"
+    ExpiresByType image/jpeg "access plus 1 month"
+    ExpiresByType image/gif "access plus 1 month"
+    ExpiresByType image/svg+xml "access plus 1 month"
+    ExpiresByType image/x-icon "access plus 1 year"
+    ExpiresByType font/woff "access plus 1 month"
+    ExpiresByType font/woff2 "access plus 1 month"
+    
+    # Não cachear arquivos dinâmicos
+    ExpiresByType text/html "access plus 0 seconds"
+    ExpiresByType application/json "access plus 0 seconds"
+</IfModule>
+
+# Compressão GZIP
+<IfModule mod_deflate.c>
+    AddOutputFilterByType DEFLATE text/plain
+    AddOutputFilterByType DEFLATE text/html
+    AddOutputFilterByType DEFLATE text/xml
+    AddOutputFilterByType DEFLATE text/css
+    AddOutputFilterByType DEFLATE application/xml
+    AddOutputFilterByType DEFLATE application/xhtml+xml
+    AddOutputFilterByType DEFLATE application/rss+xml
+    AddOutputFilterByType DEFLATE application/javascript
+    AddOutputFilterByType DEFLATE application/x-javascript
+    AddOutputFilterByType DEFLATE application/json
+</IfModule>
+
+# Configurações para API
+<IfModule mod_rewrite.c>
+    # API routes
+    RewriteCond %{REQUEST_FILENAME} !-f
+    RewriteCond %{REQUEST_FILENAME} !-d
+    RewriteRule ^api/match/([a-zA-Z0-9_]+)/config$ api/match_config.php?id=$1 [L,QSA]
+    RewriteRule ^api/match/([a-zA-Z0-9_]+)/events$ api/match_events.php?id=$1 [L,QSA]
+    RewriteRule ^api/server/([0-9]+)/status$ api/server_status.php?id=$1 [L,QSA]
+    
+    # Webhook routes
+    RewriteRule ^webhook/matchzy$ webhook.php [L,QSA]
+    
+    # Admin routes com proteção
+    RewriteRule ^admin/(.*)$ admin/$1 [L,QSA]
+</IfModule>
+
+# Configurações de upload
+<IfModule mod_php7.c>
+    php_value upload_max_filesize 10M
+    php_value post_max_size 10M
+    php_value max_execution_time 60
+    php_value max_input_time 60
+    php_value memory_limit 256M
+</IfModule>
+
+<IfModule mod_php8.c>
+    php_value upload_max_filesize 10M
+    php_value post_max_size 10M
+    php_value max_execution_time 60
+    php_value max_input_time 60
+    php_value memory_limit 256M
+</IfModule>
+
+# Prevenir acesso direto a arquivos sensíveis
+<FilesMatch "(^#.*#|\.(bak|conf|dist|fla|in[ci]|log|psd|sh|sql|sw[op])|~)$">
+    Order allow,deny
+    Deny from all
+    Satisfy All
+</FilesMatch>
+
+# Configurações específicas para o webhook
+<Files "webhook.php">
+    # Permitir apenas métodos POST
+    <RequireAll>
+        Require method POST
+    </RequireAll>
+</Files>
+
+# Configuração para logs de erro personalizado
+ErrorDocument 404 /404.php
+ErrorDocument 403 /403.php
+ErrorDocument 500 /500.php
+
+# Desabilitar listagem de diretórios
+Options -Indexes
+
+# Configurações de charset
+AddDefaultCharset UTF-8
+
+# MIME types adicionais
+<IfModule mod_mime.c>
+    AddType application/json .json
+    AddType application/javascript .js
+    AddType text/css .css
+    AddType image/svg+xml .svg
+    AddType font/woff .woff
+    AddType font/woff2 .woff2
+</IfModule>
+
+# Rate limiting básico (se mod_evasive estiver disponível)
+<IfModule mod_evasive24.c>
+    DOSHashTableSize    2048
+    DOSPageCount        5
+    DOSPageInterval     1
+    DOSSiteCount        50
+    DOSSiteInterval     1
+    DOSBlockingPeriod   300
+    DOSLogDir           /var/log/apache2/evasive
+</IfModule>
+
+# Configurações de sessão PHP
+<IfModule mod_php7.c>
+    php_value session.cookie_httponly 1
+    php_value session.cookie_secure 1
+    php_value session.use_strict_mode 1
+    php_value session.cookie_samesite Strict
+</IfModule>
+
+<IfModule mod_php8.c>
+    php_value session.cookie_httponly 1
+    php_value session.cookie_secure 1
+    php_value session.use_strict_mode 1
+    php_value session.cookie_samesite Strict
+</IfModule>
+
+# Proteger contra hotlinking de imagens
+<IfModule mod_rewrite.c>
+    RewriteCond %{HTTP_REFERER} !^$
+    RewriteCond %{HTTP_REFERER} !^https?://(www\.)?seudominio\.com [NC]
+    RewriteRule \.(jpe?g|png|gif|svg)$ - [F,L]
+</IfModule>
+
+# Configuração para CORS se necessário
+<IfModule mod_headers.c>
+    # Permitir requisições da API apenas do próprio domínio
+    SetEnvIf Origin "^https?://(www\.)?(localhost|seudominio\.com)(:[0-9]+)?$" CORS_ALLOW_ORIGIN=$0
+    Header always set Access-Control-Allow-Origin %{CORS_ALLOW_ORIGIN}e env=CORS_ALLOW_ORIGIN
+    Header always set Access-Control-Allow-Methods "GET, POST, OPTIONS, DELETE, PUT"
+    Header always set Access-Control-Allow-Headers "Content-Type, Authorization, X-Requested-With"
+    Header always set Access-Control-Allow-Credentials "true"
+</IfModule>
