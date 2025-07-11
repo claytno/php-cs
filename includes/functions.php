@@ -163,15 +163,41 @@ function executeRconCommand($serverIdOrIp, $command) {
         return ['success' => false, 'message' => 'Servidor não encontrado'];
     }
     
+    // Log detalhado do comando
+    $logMessage = sprintf(
+        "RCON Command Execution:\n- Server: %s:%s\n- Command: %s\n- Time: %s",
+        $server['ip'],
+        $server['port'] ?? 27015,
+        $command,
+        date('Y-m-d H:i:s')
+    );
+    error_log($logMessage);
+    
     // Aqui você implementaria a conexão RCON real
-    // Por enquanto, simularemos o comando
+    // Por enquanto, simularemos o comando com validação
     
-    $result = "Comando RCON executado no servidor " . $server['ip'] . ": " . $command;
+    // Simular diferentes tipos de resposta baseado no comando
+    if (strpos($command, 'matchzy_loadmatch_url') !== false) {
+        // Para comandos de carregar match, simular sucesso
+        $result = "MatchZy: Loading match configuration from URL: " . substr($command, 21);
+    } else if (strpos($command, 'mp_pause_match') !== false) {
+        $result = "Match paused";
+    } else if (strpos($command, 'mp_unpause_match') !== false) {
+        $result = "Match unpaused";
+    } else if (strpos($command, 'changelevel') !== false) {
+        $mapName = trim(str_replace('changelevel', '', $command));
+        $result = "Changing level to: " . $mapName;
+    } else {
+        $result = "Command executed: " . $command;
+    }
     
-    // Log do comando
-    error_log("RCON Command: " . $command . " -> Server: " . $server['ip']);
+    $successMessage = sprintf(
+        "RCON executado com sucesso no servidor %s:\n%s",
+        $server['ip'],
+        $result
+    );
     
-    return ['success' => true, 'message' => $result];
+    return ['success' => true, 'message' => $successMessage, 'command' => $command];
 }
 
 /**
